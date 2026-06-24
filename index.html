@@ -1,0 +1,2229 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>pi 上下文工程策略分析</title>
+  <meta name="description" content="从 AI 产品经理视角拆解 pi-agent 在上下文工程中的构建、约束和稳定性策略。">
+  <meta property="og:title" content="Pi-Agent：把上下文变成可管理的产品系统">
+  <meta property="og:description" content="从 AI 产品经理视角拆解 pi-agent 在上下文工程中的构建、约束和稳定性策略。">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Pi-Agent：把上下文变成可管理的产品系统">
+  <meta name="twitter:description" content="从 AI 产品经理视角拆解 pi-agent 在上下文工程中的构建、约束和稳定性策略。">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #ffffff;
+      --bg-soft: #f6f7f9;
+      --bg-elevated: #ffffff;
+      --text: #111114;
+      --text-soft: #51525a;
+      --text-muted: #777985;
+      --border: #e4e6eb;
+      --border-strong: #cfd3dc;
+      --code-bg: #0e1525;
+      --code-text: #d8e4f2;
+      --blue: #2563eb;
+      --blue-soft: #eff6ff;
+      --green: #059669;
+      --green-soft: #ecfdf5;
+      --amber: #d97706;
+      --amber-soft: #fffbeb;
+      --red: #dc2626;
+      --red-soft: #fef2f2;
+      --violet: #7c3aed;
+      --violet-soft: #f5f3ff;
+      --diagram-bg: #fafbfc;
+      --diagram-panel: #f8fafc;
+      --diagram-node: #ffffff;
+      --diagram-node-alt: #f0f4ff;
+      --diagram-node-soft: #fff8f0;
+      --diagram-node-ok: #dcfce7;
+      --diagram-stroke: #94a3b8;
+      --diagram-edge: #64748b;
+      --diagram-text: #334155;
+      --diagram-text-muted: #64748b;
+      --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+      --radius: 5px;
+      --header: 58px;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    .dark {
+      color-scheme: dark;
+      --bg: #09090b;
+      --bg-soft: #121318;
+      --bg-elevated: #17181f;
+      --text: #f5f7fb;
+      --text-soft: #c2c5cf;
+      --text-muted: #8e94a3;
+      --border: #2a2d36;
+      --border-strong: #3a3f4b;
+      --code-bg: #050812;
+      --code-text: #dbeafe;
+      --blue-soft: rgba(37, 99, 235, 0.16);
+      --green-soft: rgba(5, 150, 105, 0.16);
+      --amber-soft: rgba(217, 119, 6, 0.16);
+      --red-soft: rgba(220, 38, 38, 0.16);
+      --violet-soft: rgba(124, 58, 237, 0.18);
+      --diagram-bg: #0f1117;
+      --diagram-panel: #151923;
+      --diagram-node: #171d2a;
+      --diagram-node-alt: #172554;
+      --diagram-node-soft: #2a1c0d;
+      --diagram-node-ok: #052e16;
+      --diagram-stroke: #475569;
+      --diagram-edge: #94a3b8;
+      --diagram-text: #e5e7eb;
+      --diagram-text-muted: #a1a1aa;
+      --shadow: 0 16px 40px rgba(0, 0, 0, 0.32);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.72;
+      -webkit-font-smoothing: antialiased;
+    }
+    body.menu-open { overflow: hidden; }
+    a { color: inherit; text-decoration: none; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    button, input { font: inherit; }
+    .skip-link {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 200;
+      transform: translateY(-140%);
+      border-radius: 4px;
+      background: var(--text);
+      color: var(--bg);
+      padding: 8px 12px;
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 90;
+      height: var(--header);
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in srgb, var(--bg) 88%, transparent);
+      backdrop-filter: blur(14px);
+    }
+    .topbar-inner {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      max-width: 1280px;
+      height: 100%;
+      margin: 0 auto;
+      padding: 0 22px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 230px;
+      font-weight: 760;
+      letter-spacing: 0;
+    }
+    .brand-text { overflow-wrap: anywhere; }
+    .brand-mark {
+      display: inline-grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 5px;
+      background: var(--text);
+      color: var(--bg);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-left: auto;
+    }
+    .icon-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 36px;
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: var(--bg-elevated);
+      color: var(--text-soft);
+      cursor: pointer;
+    }
+    .icon-button:hover { border-color: var(--border-strong); color: var(--text); }
+    .theme-switch {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      width: 54px;
+      height: 28px;
+      border: 1px solid var(--border-strong);
+      border-radius: 999px;
+      background: var(--bg-soft);
+      box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
+      padding: 0;
+      cursor: pointer;
+    }
+    .theme-switch:hover { border-color: color-mix(in srgb, var(--text-muted) 64%, var(--border)); }
+    .theme-switch-thumb {
+      position: absolute;
+      left: 3px;
+      top: 3px;
+      display: grid;
+      place-items: center;
+      width: 20px;
+      height: 20px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--bg-elevated);
+      color: var(--text-muted);
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.16);
+      transition: transform 0.18s ease, color 0.18s ease, background 0.18s ease;
+    }
+    .dark .theme-switch-thumb {
+      transform: translateX(26px);
+      color: var(--text-soft);
+    }
+    .theme-switch svg { width: 13px; height: 13px; stroke-width: 1.8; }
+    .theme-switch-moon { display: none; }
+    .dark .theme-switch-sun { display: none; }
+    .dark .theme-switch-moon { display: block; }
+    .action-divider {
+      width: 1px;
+      height: 34px;
+      background: var(--border-strong);
+    }
+    .github-button {
+      display: inline-grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text-soft);
+      cursor: pointer;
+      transition: background 0.16s ease, color 0.16s ease;
+    }
+    .github-button:hover {
+      background: var(--bg-soft);
+      color: var(--text);
+    }
+    .github-button svg { width: 23px; height: 23px; fill: currentColor; }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .menu-button { display: none; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 286px minmax(0, 1fr);
+      gap: 38px;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 34px 22px 72px;
+    }
+    .sidebar {
+      position: sticky;
+      top: calc(var(--header) + 24px);
+      align-self: start;
+      max-height: calc(100vh - var(--header) - 40px);
+      overflow: auto;
+      padding-right: 8px;
+    }
+    .sidebar-group { margin-bottom: 24px; }
+    .sidebar-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 8px;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--blue); }
+    .dot.green { background: var(--green); }
+    .dot.amber { background: var(--amber); }
+    .dot.red { background: var(--red); }
+    .dot.violet { background: var(--violet); }
+    .nav-list { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-height: 34px;
+      border-radius: 5px;
+      padding: 6px 9px;
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.35;
+      transition: background 0.16s ease, color 0.16s ease, opacity 0.16s ease;
+    }
+    .nav-link:hover { background: var(--bg-soft); color: var(--text); }
+    .nav-link.is-active { background: var(--bg-soft); color: var(--text); font-weight: 700; }
+    .nav-index { color: var(--text-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+    .content { min-width: 0; }
+    .article-shell { max-width: 820px; }
+    .hero {
+      margin-bottom: 34px;
+      padding-bottom: 26px;
+      border-bottom: 1px solid var(--border);
+    }
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--bg-soft);
+      color: var(--text-soft);
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    h1 {
+      margin: 18px 0 12px;
+      max-width: 760px;
+      font-size: clamp(26px, 3.4vw, 42px);
+      line-height: 1.04;
+      letter-spacing: 0;
+    }
+    .hero-title-line {
+      display: block;
+      margin-top: 14px;
+      color: var(--text-soft);
+      font-size: clamp(17px, 1.9vw, 23px);
+      line-height: 1.18;
+      font-weight: 400;
+    }
+    .hero-subtitle {
+      max-width: 760px;
+      margin: 0;
+      color: var(--text-soft);
+      font-size: 18px;
+      line-height: 1.72;
+    }
+    .page-overview {
+      margin: 0 0 52px;
+      padding: 0;
+    }
+    .overview-head {
+      display: grid;
+      gap: 12px;
+      padding-bottom: 0;
+    }
+    .overview-title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+    .overview-version {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      border-radius: 5px;
+      background: var(--bg-soft);
+      color: var(--text-soft);
+      padding: 4px 9px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      font-weight: 760;
+      line-height: 1;
+    }
+    .page-overview h2 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.22;
+    }
+    .overview-subtitle {
+      max-width: 700px;
+      margin: 0;
+      color: var(--text-soft);
+      font-size: 15px;
+      line-height: 1.72;
+    }
+    .overview-quote {
+      margin: 2px 0 0;
+      border-left: 4px solid color-mix(in srgb, var(--blue) 58%, var(--green));
+      padding: 0 0 0 14px;
+      color: var(--text-soft);
+    }
+    .overview-quote p {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.72;
+    }
+    .overview-quote p + p { margin-top: 4px; }
+    .overview-quote em {
+      color: var(--text);
+      font-style: italic;
+      font-weight: 650;
+    }
+    .overview-sections {
+      display: grid;
+      gap: 28px;
+      margin-top: 30px;
+    }
+    .overview-block { min-width: 0; }
+    .overview-block + .overview-block {
+      padding-top: 0;
+    }
+    .overview-block h3 {
+      margin: 0 0 10px;
+      font-size: 19px;
+      line-height: 1.35;
+    }
+    .overview-block p {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.72;
+    }
+    .overview-list {
+      display: grid;
+      gap: 8px;
+      margin: 12px 0 0;
+      padding-left: 22px;
+      color: var(--text-soft);
+      font-size: 15px;
+      line-height: 1.72;
+    }
+    .overview-insights {
+      margin: 12px 0 0;
+    }
+    .overview-insights li {
+      margin-top: 0;
+    }
+    .jump-index-block {
+      scroll-margin-top: calc(var(--header) + 22px);
+      margin: 0 0 38px;
+    }
+    .jump-index-title {
+      margin: 0 0 12px;
+      font-size: 24px;
+      line-height: 1.22;
+    }
+    .jump-index {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-soft);
+      padding: 18px 20px 20px;
+    }
+    .jump-list {
+      display: grid;
+      gap: 5px;
+      margin: 0;
+      padding: 0 0 0 4px;
+      list-style: none;
+    }
+    .jump-link {
+      display: grid;
+      grid-template-columns: 14px 28px minmax(0, 1fr);
+      align-items: baseline;
+      gap: 8px;
+      padding: 1px 0;
+      color: var(--text-soft);
+      font-size: 15px;
+      line-height: 1.5;
+      transition: color 0.16s ease;
+    }
+    .jump-link::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      margin-top: 0.7em;
+      border-radius: 999px;
+      background: var(--text-muted);
+      opacity: 0.76;
+    }
+    .jump-link:hover,
+    .jump-link:hover .jump-no {
+      color: var(--blue);
+    }
+    .jump-link:hover::before {
+      background: var(--blue);
+      opacity: 1;
+    }
+    .jump-no {
+      color: var(--text-muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      font-weight: 760;
+      transition: color 0.16s ease;
+    }
+    section {
+      scroll-margin-top: calc(var(--header) + 22px);
+      margin: 60px 0 40px;
+    }
+    article > section[id] {
+      padding-top: 32px;
+    }
+    .section-heading {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .section-no {
+      display: inline-grid;
+      place-items: center;
+      width: 42px;
+      height: 34px;
+      border-radius: 5px;
+      background: var(--bg-soft);
+      color: var(--text-soft);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    h2 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.22;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 28px 0 10px;
+      color: var(--text);
+      font-size: 19px;
+      line-height: 1.35;
+    }
+    h4 {
+      margin: 22px 0 8px;
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.35;
+    }
+    p { margin: 10px 0; color: var(--text-soft); }
+    strong { color: var(--text); }
+    .lead {
+      color: var(--text-soft);
+      font-size: 15px;
+      line-height: 1.72;
+    }
+    .callout {
+      position: relative;
+      margin: 20px 0;
+      border: 0;
+      border-radius: 6px;
+      background: linear-gradient(105deg, #f1f7fd 0%, #f2fcf6 100%);
+      padding: 30px 34px 32px 56px;
+      overflow: hidden;
+    }
+    .callout::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 3px;
+      background: linear-gradient(180deg, #408cf4 0%, #13bfa8 100%);
+    }
+    .callout.green,
+    .callout.amber,
+    .callout.red,
+    .callout.violet {
+      background: linear-gradient(105deg, #f1f7fd 0%, #f2fcf6 100%);
+    }
+    .callout p {
+      margin: 0;
+      color: #273fa9;
+      font-size: 15px;
+      font-weight: 760;
+      line-height: 1.72;
+    }
+    .callout strong {
+      color: #09090b;
+      font-weight: 800;
+    }
+    .summary-index {
+      display: grid;
+      gap: 8px;
+      margin: 18px 0;
+      border-left: 2px solid color-mix(in srgb, var(--blue) 62%, var(--green));
+      padding-left: 14px;
+    }
+    .summary-item {
+      display: grid;
+      grid-template-columns: 56px minmax(0, 1fr);
+      align-items: baseline;
+      gap: 8px;
+      border-radius: var(--radius);
+      background: var(--bg-soft);
+      padding: 10px 12px;
+    }
+    .summary-key {
+      color: var(--text-muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.35;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .summary-copy {
+      min-width: 0;
+      color: var(--text-soft);
+      font-size: 15px;
+      line-height: 1.58;
+      overflow-wrap: anywhere;
+    }
+    .summary-copy strong {
+      margin-right: 20px;
+      color: var(--text);
+      font-weight: 800;
+    }
+    .summary-index.plain .summary-item {
+      grid-template-columns: minmax(84px, max-content) minmax(0, 1fr);
+      gap: 10px;
+      padding: 11px 13px;
+    }
+    .summary-index.plain .summary-title {
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.5;
+      white-space: nowrap;
+    }
+    .summary-index.plain .summary-desc {
+      min-width: 0;
+      color: var(--text-soft);
+      font-size: 15px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+    .step-list {
+      counter-reset: step;
+      display: grid;
+      gap: 14px;
+      margin: 16px 0;
+      padding: 0;
+      list-style: none;
+    }
+    .step-list li {
+      counter-increment: step;
+      position: relative;
+      border: 0;
+      background: transparent;
+      margin-top: 0;
+      padding: 1px 0 1px 42px;
+      font-size: 15px;
+      line-height: 1.72;
+    }
+    .step-list li::before {
+      content: counter(step);
+      position: absolute;
+      top: 3px;
+      left: 0;
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 5px;
+      border: 1px solid color-mix(in srgb, var(--blue) 28%, var(--border));
+      background: linear-gradient(135deg, var(--blue-soft), var(--green-soft));
+      color: var(--blue);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .dark .step-list li::before {
+      border-color: color-mix(in srgb, var(--blue) 42%, var(--border));
+      color: #93c5fd;
+    }
+    ul { color: var(--text-soft); padding-left: 22px; }
+    li + li { margin-top: 5px; }
+    .table-wrap {
+      margin: 18px 0;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+    }
+    .table-list {
+      display: grid;
+      gap: 4px;
+      margin: 0;
+      padding-left: 18px;
+      color: var(--text-soft);
+    }
+    .table-list li + li { margin-top: 0; }
+    table {
+      width: 100%;
+      min-width: 620px;
+      border-collapse: collapse;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    th, td { padding: 11px 13px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th {
+      text-align: left;
+      color: var(--text-muted);
+      background: var(--bg-soft);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    tr:last-child td { border-bottom: 0; }
+    td { color: var(--text-soft); }
+    td strong { color: var(--text); }
+    .project-summary-table {
+      min-width: 780px;
+      table-layout: fixed;
+    }
+    .project-summary-table col:nth-child(1) { width: 14%; }
+    .project-summary-table col:nth-child(2) { width: 55%; }
+    .project-summary-table col:nth-child(3) { width: 31%; }
+    .project-summary-table th:first-child,
+    .project-summary-table td:first-child {
+      white-space: nowrap;
+    }
+    .project-summary-table code { white-space: nowrap; }
+    .tradeoff-table {
+      min-width: 760px;
+      table-layout: fixed;
+    }
+    .tradeoff-table col:nth-child(1) { width: 14%; }
+    .tradeoff-table col:nth-child(2) { width: 43%; }
+    .tradeoff-table col:nth-child(3) { width: 43%; }
+    .tradeoff-table th,
+    .tradeoff-table td {
+      word-break: keep-all;
+      overflow-wrap: normal;
+    }
+    .tradeoff-table th:first-child,
+    .tradeoff-table td:first-child {
+      white-space: nowrap;
+    }
+    :not(pre) > code {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg-soft);
+      color: color-mix(in srgb, var(--blue) 78%, var(--text));
+      padding: 1px 5px;
+      font-size: 0.92em;
+    }
+    pre.copyable {
+      position: relative;
+      overflow-x: auto;
+      margin: 16px 0;
+      border: 1px solid color-mix(in srgb, var(--code-bg) 70%, white);
+      border-radius: var(--radius);
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 18px;
+      font-size: 13px;
+      line-height: 1.58;
+    }
+    .copy-button {
+      position: absolute;
+      top: 9px;
+      right: 9px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #dbeafe;
+      padding: 3px 8px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .diagram-card {
+      margin: 20px 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--diagram-bg);
+      box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+      overflow: hidden;
+    }
+    .diagram-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--diagram-panel);
+      padding: 10px 12px;
+      color: var(--diagram-text);
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .mermaid {
+      width: 100%;
+      min-width: 0;
+      padding: 22px;
+      text-align: center;
+      background: var(--diagram-bg);
+    }
+    .mermaid svg {
+      display: inline-block;
+      width: auto;
+      max-width: 100% !important;
+      height: auto;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif !important;
+    }
+    .mermaid svg .node rect,
+    .mermaid svg .node circle,
+    .mermaid svg .node ellipse,
+    .mermaid svg .node polygon,
+    .mermaid svg .node path {
+      filter: none !important;
+      stroke-width: 1.5px !important;
+    }
+    .mermaid svg .edgePath path,
+    .mermaid svg .flowchart-link,
+    .mermaid svg .messageLine0,
+    .mermaid svg .messageLine1 {
+      stroke-width: 1.5px !important;
+    }
+    .mermaid svg .cluster rect {
+      rx: 5px !important;
+      stroke-dasharray: 4 3;
+    }
+    .diagram-scroll {
+      position: relative;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-color: color-mix(in srgb, var(--blue) 42%, var(--border)) transparent;
+    }
+    .diagram-scroll::after {
+      content: "横向滚动查看完整图";
+      position: absolute;
+      right: 10px;
+      bottom: 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+      color: var(--text-muted);
+      padding: 2px 8px;
+      font-size: 11px;
+      line-height: 1.4;
+      opacity: 0;
+      pointer-events: none;
+      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+    }
+    .diagram-scroll.has-overflow::after { opacity: 0.92; }
+    .mermaid-fallback {
+      text-align: left;
+      white-space: pre;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--text-soft);
+    }
+    details {
+      margin: 18px 0;
+      border-radius: 5px;
+      background: #f6f9ff;
+      overflow: hidden;
+    }
+    summary {
+      position: relative;
+      cursor: pointer;
+      min-height: 48px;
+      padding: 13px 42px 13px 18px;
+      background: linear-gradient(90deg, #183a64 0%, #2563eb 100%);
+      color: #ffffff;
+      font-weight: 800;
+      line-height: 1.45;
+      list-style: none;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::after {
+      content: '+';
+      position: absolute;
+      top: 50%;
+      right: 18px;
+      transform: translateY(-50%);
+      color: #ffffff;
+      font-weight: 800;
+    }
+    details.is-open summary::after, details[open] summary::after { content: '-'; }
+    .details-body {
+      background: #f8fbff;
+      padding: 12px 18px 16px;
+    }
+    .page-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-top: 72px;
+      border-top: 1px solid var(--border);
+      padding-top: 18px;
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .page-footer strong {
+      color: var(--text-soft);
+      font-weight: 760;
+    }
+    .page-footer-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .page-footer-meta span + span::before {
+      content: "";
+      display: inline-block;
+      width: 1px;
+      height: 12px;
+      margin-right: 10px;
+      background: var(--border-strong);
+      vertical-align: -2px;
+    }
+    .back-to-top {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 80;
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--bg-elevated);
+      color: var(--text-soft);
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      opacity: 0;
+      transform: translateY(10px);
+      pointer-events: none;
+      transition: opacity 0.16s ease, transform 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+    }
+    .back-to-top.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .back-to-top:hover {
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+
+    .mobile-panel, .backdrop { display: none; }
+
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; padding-top: 24px; }
+      .sidebar { display: none; }
+      .menu-button { display: inline-flex; }
+      .brand { min-width: auto; }
+      .mobile-panel {
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 120;
+        display: block;
+        width: min(84vw, 340px);
+        overflow: auto;
+        border-right: 1px solid var(--border);
+        background: var(--bg);
+        padding: 18px;
+        transform: translateX(-110%);
+        transition: transform 0.18s ease;
+      }
+      body.menu-open .mobile-panel { transform: translateX(0); }
+      .mobile-panel[hidden], .backdrop[hidden] { display: none; }
+      .backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 110;
+        display: block;
+        background: rgba(0, 0, 0, 0.38);
+      }
+      .mobile-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    }
+    @media (max-width: 720px) {
+      .topbar { height: auto; min-height: var(--header); }
+      .topbar-inner { flex-wrap: wrap; gap: 10px; padding: 10px 14px; }
+      .brand { flex: 1; width: auto; min-width: 0; }
+      .header-actions { width: auto; margin-left: auto; }
+      .layout { padding: 22px 14px 54px; }
+      h1 { font-size: 27px; }
+      h2 { font-size: 24px; }
+      .page-overview h2 { font-size: 24px; }
+      .jump-index { padding: 16px 14px 18px; }
+      .jump-index-title { font-size: 24px; }
+      .jump-link { font-size: 15px; }
+      section { margin: 48px 0 32px; }
+      article > section[id] { padding-top: 24px; }
+      .summary-index {
+        width: 100%;
+        max-width: calc(100vw - 28px);
+      }
+      .summary-item {
+        grid-template-columns: 1fr;
+        gap: 4px;
+      }
+      .summary-copy strong {
+        display: block;
+        margin: 0 0 2px;
+      }
+      .summary-index.plain .summary-item {
+        grid-template-columns: 1fr;
+        gap: 2px;
+      }
+      .summary-index.plain .summary-title {
+        white-space: normal;
+      }
+      .section-heading { align-items: flex-start; }
+      .callout {
+        border-radius: 6px;
+        padding: 22px 20px 24px 34px;
+      }
+      .page-footer { align-items: flex-start; flex-direction: column; }
+      .back-to-top { right: 16px; bottom: 16px; width: 34px; height: 34px; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#content">跳到正文</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <button class="icon-button menu-button" type="button" data-menu-button aria-label="打开目录">☰</button>
+      <a class="brand" href="#top" aria-label="回到顶部"><span class="brand-mark">pi</span><span class="brand-text">源码拆解：上下文工程策略</span></a>
+      <div class="header-actions">
+        <button class="theme-switch" type="button" data-theme-toggle aria-label="切换深浅色模式">
+          <span class="theme-switch-thumb" aria-hidden="true">
+            <svg class="theme-switch-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2.5M12 19.5V22M4.93 4.93 6.7 6.7M17.3 17.3l1.77 1.77M2 12h2.5M19.5 12H22M4.93 19.07 6.7 17.3M17.3 6.7l1.77-1.77"></path>
+            </svg>
+            <svg class="theme-switch-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+              <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 7.5 7.5 0 1 0 20.5 14.2Z"></path>
+            </svg>
+          </span>
+          <span class="sr-only">切换深浅模式</span>
+        </button>
+        <span class="action-divider" aria-hidden="true"></span>
+        <button class="github-button" type="button" data-github-button aria-label="GitHub">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.23c-3.34.73-4.04-1.42-4.04-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.45 11.45 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.62-5.49 5.92.43.37.82 1.1.82 2.23v3.3c0 .32.22.7.83.58A12 12 0 0 0 12 .5Z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+  <div class="backdrop" data-backdrop hidden></div>
+  <aside class="mobile-panel" data-mobile-panel hidden>
+    <div class="mobile-head">
+      <strong>目录</strong>
+      <button class="icon-button" type="button" data-close-menu aria-label="关闭目录">×</button>
+    </div>
+    <nav aria-label="移动端目录">
+      
+    <div class="sidebar-group">
+      <div class="sidebar-title"><span class="dot"></span>总览</div>
+      <ul class="nav-list">
+        <li><a class="nav-link" data-section-link href="#overview"><span class="nav-index">01</span><span>总览与三类失败</span></a></li>
+        <li><a class="nav-link" data-section-link href="#lifecycle"><span class="nav-index">02</span><span>任务生命周期</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-title"><span class="dot green"></span>上下文构建</div>
+      <ul class="nav-list">
+        <li><a class="nav-link" data-section-link href="#startup"><span class="nav-index">03</span><span>资源发现与信任</span></a></li>
+        <li><a class="nav-link" data-section-link href="#session-tree"><span class="nav-index">04</span><span>会话树重建</span></a></li>
+        <li><a class="nav-link" data-section-link href="#system-prompt"><span class="nav-index">05</span><span>系统提示词组装</span></a></li>
+        <li><a class="nav-link" data-section-link href="#loop"><span class="nav-index">06</span><span>Agent Loop 装配线</span></a></li>
+        <li><a class="nav-link" data-section-link href="#compaction"><span class="nav-index">07</span><span>上下文压缩</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-title"><span class="dot amber"></span>工程约束</div>
+      <ul class="nav-list">
+        <li><a class="nav-link" data-section-link href="#constraints"><span class="nav-index">08</span><span>三维约束总览</span></a></li>
+        <li><a class="nav-link" data-section-link href="#under"><span class="nav-index">09</span><span>防欠给</span></a></li>
+        <li><a class="nav-link" data-section-link href="#wrong"><span class="nav-index">10</span><span>防错给</span></a></li>
+        <li><a class="nav-link" data-section-link href="#over"><span class="nav-index">11</span><span>防过给</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-title"><span class="dot red"></span>来源稳定性</div>
+      <ul class="nav-list">
+        <li><a class="nav-link" data-section-link href="#sources"><span class="nav-index">12</span><span>三层来源模型</span></a></li>
+        <li><a class="nav-link" data-section-link href="#stability"><span class="nav-index">13</span><span>稳定性矩阵</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-title"><span class="dot violet"></span>深度洞察</div>
+      <ul class="nav-list">
+        <li><a class="nav-link" data-section-link href="#insights"><span class="nav-index">14</span><span>架构洞察</span></a></li>
+        <li><a class="nav-link" data-section-link href="#events"><span class="nav-index">15</span><span>事件与钩子</span></a></li>
+        <li><a class="nav-link" data-section-link href="#queues"><span class="nav-index">16</span><span>双队列</span></a></li>
+        <li><a class="nav-link" data-section-link href="#branching"><span class="nav-index">17</span><span>分支与热替换</span></a></li>
+        <li><a class="nav-link" data-section-link href="#resilience"><span class="nav-index">18</span><span>韧性设计</span></a></li>
+        <li><a class="nav-link" data-section-link href="#defaults"><span class="nav-index">19</span><span>默认值</span></a></li>
+        <li><a class="nav-link" data-section-link href="#principles"><span class="nav-index">20</span><span>设计原则</span></a></li>
+      </ul>
+    </div>
+    </nav>
+  </aside>
+  <div class="layout" id="top">
+    <aside class="sidebar">
+      <nav aria-label="章节目录">
+        
+    <div class="sidebar-group">
+      <div class="sidebar-title"><span class="dot"></span>总览</div>
+      <ul class="nav-list">
+        <li><a class="nav-link" data-section-link href="#overview"><span class="nav-index">01</span><span>总览与三类失败</span></a></li>
+        <li><a class="nav-link" data-section-link href="#lifecycle"><span class="nav-index">02</span><span>任务生命周期</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-title"><span class="dot green"></span>上下文构建</div>
+      <ul class="nav-list">
+        <li><a class="nav-link" data-section-link href="#startup"><span class="nav-index">03</span><span>资源发现与信任</span></a></li>
+        <li><a class="nav-link" data-section-link href="#session-tree"><span class="nav-index">04</span><span>会话树重建</span></a></li>
+        <li><a class="nav-link" data-section-link href="#system-prompt"><span class="nav-index">05</span><span>系统提示词组装</span></a></li>
+        <li><a class="nav-link" data-section-link href="#loop"><span class="nav-index">06</span><span>Agent Loop 装配线</span></a></li>
+        <li><a class="nav-link" data-section-link href="#compaction"><span class="nav-index">07</span><span>上下文压缩</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-title"><span class="dot amber"></span>工程约束</div>
+      <ul class="nav-list">
+        <li><a class="nav-link" data-section-link href="#constraints"><span class="nav-index">08</span><span>三维约束总览</span></a></li>
+        <li><a class="nav-link" data-section-link href="#under"><span class="nav-index">09</span><span>防欠给</span></a></li>
+        <li><a class="nav-link" data-section-link href="#wrong"><span class="nav-index">10</span><span>防错给</span></a></li>
+        <li><a class="nav-link" data-section-link href="#over"><span class="nav-index">11</span><span>防过给</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-title"><span class="dot red"></span>来源稳定性</div>
+      <ul class="nav-list">
+        <li><a class="nav-link" data-section-link href="#sources"><span class="nav-index">12</span><span>三层来源模型</span></a></li>
+        <li><a class="nav-link" data-section-link href="#stability"><span class="nav-index">13</span><span>稳定性矩阵</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-title"><span class="dot violet"></span>深度洞察</div>
+      <ul class="nav-list">
+        <li><a class="nav-link" data-section-link href="#insights"><span class="nav-index">14</span><span>架构洞察</span></a></li>
+        <li><a class="nav-link" data-section-link href="#events"><span class="nav-index">15</span><span>事件与钩子</span></a></li>
+        <li><a class="nav-link" data-section-link href="#queues"><span class="nav-index">16</span><span>双队列</span></a></li>
+        <li><a class="nav-link" data-section-link href="#branching"><span class="nav-index">17</span><span>分支与热替换</span></a></li>
+        <li><a class="nav-link" data-section-link href="#resilience"><span class="nav-index">18</span><span>韧性设计</span></a></li>
+        <li><a class="nav-link" data-section-link href="#defaults"><span class="nav-index">19</span><span>默认值</span></a></li>
+        <li><a class="nav-link" data-section-link href="#principles"><span class="nav-index">20</span><span>设计原则</span></a></li>
+      </ul>
+    </div>
+      </nav>
+    </aside>
+    <main class="content" id="content">
+      <article class="article-shell">
+        <header class="hero">
+          <span class="kicker">AIPM视角 · 源码拆解</span>
+          <h1>从 Pi-Agent 看上下文工程<span class="hero-title-line">—— 生产级 Agent 的策略拆解</span></h1>
+        </header>
+
+        <section class="page-overview" aria-label="Overview">
+          <div class="overview-head">
+            <div class="overview-title-row">
+              <h2>总览</h2>
+              <span class="overview-version">overview</span>
+            </div>
+            <p class="overview-subtitle">从 AI 产品经理视角，把 pi-agent 的上下文机制拆成产品目标、用户问题、机制选择、取舍和失效后果。</p>
+            <blockquote class="overview-quote">
+              <p><em>“上下文不是 prompt 拼接，而是一条持续重建的产品管道。”</em></p>
+              <p><strong>核心判断：</strong>pi-agent 的价值在于把模型输入变成可观测、可恢复、可裁剪的系统。</p>
+            </blockquote>
+          </div>
+
+          <div class="overview-sections">
+            <div class="overview-block">
+              <h3>这是什么</h3>
+              <p>将 pi-agent 当作生产级 AI Agent 产品系统来拆解：上下文从哪里来、如何进入模型、如何被过滤、压缩、恢复，以及失控时系统如何止损。</p>
+            </div>
+
+            <div class="overview-block">
+              <h3>为什么要拆解 Pi-Agent 项目</h3>
+              <ul class="overview-list">
+                <li>它把 prompt 从静态文案升级成可维护系统：资源发现、设置合并、技能索引、会话历史和工具定义共同参与上下文构建。</li>
+                <li>它暴露了生产级 Agent 的真实矛盾：模型既不能缺上下文，也不能拿到错误上下文，更不能被无关内容淹没。</li>
+                <li>它的任务生命周期完整覆盖启动、会话恢复、agent loop、工具结果、compaction、分支和韧性恢复，适合观察上下文如何长期流动。</li>
+                <li>它能给 AI 产品经理一个可复用判断框架：什么信息应稳定预设，什么信息应由用户提供，什么信息必须由系统动态裁剪。</li>
+              </ul>
+            </div>
+
+            <div class="overview-block">
+              <h3>项目概况</h3>
+              <div class="table-wrap">
+                <table class="project-summary-table">
+                  <colgroup><col><col><col></colgroup>
+                  <thead><tr><th>维度</th><th>项目概况</th><th>产品含义</th></tr></thead>
+                  <tbody>
+                    <tr><td>项目类型</td><td>面向编码任务的 AI Agent / CLI。</td><td><ul class="table-list"><li>不是单轮问答。</li><li>是持续任务执行系统。</li></ul></td></tr>
+                    <tr><td>核心对象</td><td><code>AgentContext</code>、会话树、工具、Entry、<code>CompactionEntry</code>。</td><td><ul class="table-list"><li>围绕“下一轮模型应该看见什么”组织。</li><li>把历史、工具和状态放进同一条上下文管道。</li></ul></td></tr>
+                    <tr><td>上下文入口</td><td><code>buildSessionContext()</code>、<code>transformContext()</code>、<code>convertToLlm()</code>。</td><td><ul class="table-list"><li>从会话历史到模型消息。</li><li>每轮调用前持续重建和过滤。</li></ul></td></tr>
+                    <tr><td>风险约束</td><td>防欠给、防错给、防过给。</td><td><ul class="table-list"><li>上下文质量比数量更关键。</li><li>预算、来源和时机都要被产品化管理。</li></ul></td></tr>
+                    <tr><td>运行状态</td><td><code>activeToolNames</code>、steering、follow-up、分支摘要、模型热替换。</td><td><ul class="table-list"><li>用户干预要可恢复。</li><li>系统状态要能影响下一轮上下文。</li></ul></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="overview-block">
+              <h3>核心洞察</h3>
+              <ol class="step-list overview-insights">
+                <li><strong>上下文不是 prompt 拼接。</strong>它是一条从资源、历史、工具到模型消息的产品管道，每个边界都在重新决定“给什么”。</li>
+                <li><strong>压缩不是删历史。</strong>好的 compaction 是把早期工作重写成可恢复摘要，并保护 user → assistant → toolResult 的结构完整性。</li>
+                <li><strong>工具暴露就是产品权限。</strong><code>activeToolNames</code> 不只是省 token，它决定模型此刻被允许做什么，也决定它会被什么诱导。</li>
+                <li><strong>稳定性来自来源分层。</strong>开发者预设、用户提供、LLM 自建三层来源要分开治理，否则偏差会在会话中自我强化。</li>
+              </ol>
+            </div>
+          </div>
+        </section>
+
+        <div class="jump-index-block">
+          <h2 class="jump-index-title" id="page-toc">目录</h2>
+          <nav class="jump-index" aria-labelledby="page-toc">
+            <ul class="jump-list">
+              <li><a class="jump-link" href="#overview"><span class="jump-no">01</span><span>总览：上下文工程不是 prompt 拼接</span></a></li>
+              <li><a class="jump-link" href="#lifecycle"><span class="jump-no">02</span><span>生命周期：一次任务中的上下文流动</span></a></li>
+              <li><a class="jump-link" href="#startup"><span class="jump-no">03</span><span>启动：资源发现和信任边界</span></a></li>
+              <li><a class="jump-link" href="#session-tree"><span class="jump-no">04</span><span>会话树：上下文不是线性聊天记录</span></a></li>
+              <li><a class="jump-link" href="#system-prompt"><span class="jump-no">05</span><span>系统提示词：最大的单次文本装配</span></a></li>
+              <li><a class="jump-link" href="#loop"><span class="jump-no">06</span><span>Agent Loop：每轮调用前的最后装配线</span></a></li>
+              <li><a class="jump-link" href="#compaction"><span class="jump-no">07</span><span>Compaction：用摘要替代膨胀历史</span></a></li>
+              <li><a class="jump-link" href="#constraints"><span class="jump-no">08</span><span>三维约束：防欠给、防错给、防过给</span></a></li>
+              <li><a class="jump-link" href="#under"><span class="jump-no">09</span><span>防欠给：让模型不必脑补</span></a></li>
+              <li><a class="jump-link" href="#wrong"><span class="jump-no">10</span><span>防错给：错误上下文比缺上下文更危险</span></a></li>
+              <li><a class="jump-link" href="#over"><span class="jump-no">11</span><span>防过给：上下文预算是产品资源</span></a></li>
+              <li><a class="jump-link" href="#sources"><span class="jump-no">12</span><span>来源分类：谁提供上下文，谁控制风险</span></a></li>
+              <li><a class="jump-link" href="#stability"><span class="jump-no">13</span><span>稳定性：可变性和可控性的矩阵</span></a></li>
+              <li><a class="jump-link" href="#insights"><span class="jump-no">14</span><span>深度洞察：上下文工程背后的产品架构</span></a></li>
+              <li><a class="jump-link" href="#events"><span class="jump-no">15</span><span>事件和钩子：可观测性不是事后补丁</span></a></li>
+              <li><a class="jump-link" href="#queues"><span class="jump-no">16</span><span>双队列：用户插话的产品语义</span></a></li>
+              <li><a class="jump-link" href="#branching"><span class="jump-no">17</span><span>分支和热替换：让上下文支持探索</span></a></li>
+              <li><a class="jump-link" href="#resilience"><span class="jump-no">18</span><span>韧性：失败也要进入上下文协议</span></a></li>
+              <li><a class="jump-link" href="#defaults"><span class="jump-no">19</span><span>默认值：产品选择藏在配置里</span></a></li>
+              <li><a class="jump-link" href="#principles"><span class="jump-no">20</span><span>总结：面向生产级 AI Agent 的设计原则</span></a></li>
+            </ul>
+          </nav>
+        </div>
+
+        <section id="overview">
+          <div class="section-heading"><span class="section-no">01</span><h2>总览：上下文工程不是 prompt 拼接</h2></div>
+          <p class="lead">从 AI 产品经理视角看，pi 的核心命题可以压缩成一句话：<strong>把正确的信息，在正确的时间，以正确的形式，喂给正确的大模型。</strong></p>
+          <p>这句话里的每个词都对应一个产品风险。信息不正确，模型会沿着错误前提推理；时间不正确，模型会在不该写文件的时候写文件；形式不正确，模型看到了内容却读不出结构；模型不正确，简单任务浪费成本，复杂任务又不够稳。</p>
+          <div class="callout">
+            <p><strong>策略：</strong>pi 没有把上下文当成一次性字符串，而是把它设计成一条持续流动的管道。启动、会话恢复、用户插话、工具执行、压缩、分支切换，每个环节都可能改写下一次模型调用看到的内容。</p>
+          </div>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>四层架构中的上下文职责</span><span>Architecture</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  L1["01 终端交互层<br/>接收输入 · 呈现状态 · 管理入口"]
+  L2["02 会话管理层<br/>会话树 · compaction · 状态恢复 · 事件"]
+  L3["03 代理循环层<br/>消息转换 · 工具编排 · steering / follow-up"]
+  L4["04 模型适配层<br/>统一模型 API · 流式响应 · 工具 schema"]
+  L1 --> L2 --> L3 --> L4
+  class L1 section-root
+  class L2 section-1
+  class L3 section-2
+  class L4 section-3</pre></div>
+          </div>
+          <h3>三个基础矛盾</h3>
+          <p>上下文工程本质上是在管理三个互相拉扯的约束：欠给、错给、过给。它们不是孤立问题，而是会互相触发的产品链路问题。</p>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>上下文工程的三类失败</span><span>Tradeoff</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  ROOT["上下文工程的三类失败"]
+  ROOT --> UNDER["欠给<br/>信息太少，模型开始脑补"]
+  ROOT --> WRONG["错给<br/>信息不对，模型基于错误前提推理"]
+  ROOT --> OVER["过给<br/>信息太多，注意力稀释或上下文溢出"]
+  UNDER --> UFIX["产品解法<br/>最低充分信息稳定出现"]
+  WRONG --> WFIX["产品解法<br/>来源追踪 + 信任边界 + schema 校验"]
+  OVER --> OFIX["产品解法<br/>工具过滤 + 按需技能 + compaction"]
+  class ROOT section-root
+  class UNDER,UFIX section-1
+  class WRONG,WFIX section-2
+  class OVER,OFIX section-3</pre></div>
+          </div>
+          <div class="table-wrap">
+            <table class="tradeoff-table">
+              <colgroup><col><col><col></colgroup>
+              <thead><tr><th>问题</th><th>原因</th><th>产品后果</th></tr></thead>
+              <tbody>
+                <tr><td><strong>欠给</strong></td><td>缺少编码规范、工作目录、历史决策或工具能力说明。</td><td>模型开始脑补 API，忽略用户约束，产出看似合理但无法落地。</td></tr>
+                <tr><td><strong>错给</strong></td><td>工具定义和实际能力不匹配，文件内容过时，路径或状态恢复错误。</td><td>模型在错误前提上做正确推理，结果全错，排查成本高。</td></tr>
+                <tr><td><strong>过给</strong></td><td>把完整历史、全部工具、所有技能一次性塞入上下文。</td><td>上下文溢出、注意力稀释、延迟增加，关键指令被噪音淹没。</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>最终收敛为三个入口</h3>
+          <p>无论上游有多少资源文件、设置、技能、会话 Entry、压缩摘要，进入 agent loop 的上下文最终都收敛为 <code>AgentContext</code> 的三个要素。</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>要素</th><th>说明</th><th>产品含义</th></tr></thead>
+              <tbody>
+                <tr><td><code>systemPrompt</code></td><td>角色定义、工具指南、技能索引、项目上下文、日期和 cwd。</td><td>决定模型的行为边界和基础世界观。</td></tr>
+                <tr><td><code>messages</code></td><td>用户消息、助手响应、工具调用和结果、压缩摘要。</td><td>承载任务历史和当前工作状态。</td></tr>
+                <tr><td><code>tools</code></td><td>当前暴露给模型的工具集合，可被 <code>activeToolNames</code> 过滤。</td><td>决定模型此刻能做什么，也决定它会被什么诱导。</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="lifecycle">
+          <div class="section-heading"><span class="section-no">02</span><h2>生命周期：一次任务中的上下文流动</h2></div>
+          <p class="lead">pi 的上下文不是在启动时构建一次，然后原封不动地传给模型。它会随着任务推进不断重建、过滤、注入和压缩。</p>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>一轮 Agent 调用的上下文流</span><span>Runtime</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  subgraph BUILD["上下文重建"]
+    direction LR
+    U["User Input<br/>新目标或插话"] --> S["Session Tree<br/>重建历史"]
+    S --> R["Resource Loader<br/>AGENTS / SKILL / settings"]
+    R --> P["System Prompt Builder<br/>稳定骨架 + 项目上下文"]
+  end
+  subgraph CALL["模型调用前处理"]
+    direction LR
+    T["transformContext()<br/>剪枝 / 注入 / 保留摘要"] --> C["convertToLlm()<br/>协议转换 / 过滤内部消息"]
+    C --> L["LLM Call<br/>基于当前视图决策"]
+  end
+  subgraph WRITEBACK["工具结果与记忆维护"]
+    direction LR
+    E["Tool Execution<br/>读写文件 / shell / 检索"] --> W["Tool Result<br/>写回 Session Tree"]
+    W --> K{"预算接近上限？"}
+    K -->|"否"| N["保持原始历史<br/>进入下一轮"]
+    K -->|"是"| M["Compaction<br/>生成可恢复摘要"]
+    M --> N
+  end
+  BUILD --> CALL --> WRITEBACK
+  class U,S,R,P section-root
+  class T,C,L section-1
+  class E,W,K,M,N section-2</pre></div>
+          </div>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>13 阶段上下文生命周期</span><span>Lifecycle</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  P1["启动准备｜01-04<br/>启动 / 会话初始化<br/>buildSessionContext() / buildSystemPrompt()"]
+  P2["循环运行｜05-11<br/>用户消息入队 / LLM 调用 / 工具执行<br/>steering 检查与注入 / follow-up 检查与注入"]
+  P3["收尾维护｜12-13<br/>CompactionEntry / SessionTree 持久化"]
+  P1 --> P2 --> P3
+  class P1 section-root
+  class P2 section-1
+  class P3 section-2</pre></div>
+          </div>
+          <p><strong>策略：</strong>把生命周期拆成启动准备、循环运行、收尾维护三组。启动准备决定初始骨架，循环运行处理高频变化，收尾维护负责压缩和持久化。</p>
+          <p><strong>解决的问题：</strong>编码任务不是一次问答，而是持续决策过程。用户可能插话，工具可能失败，模型可能换档，历史可能压缩。只有把上下文做成流水线，系统才有机会在每个边界修正方向。</p>
+          <p><strong>不这样做会怎样：</strong>上下文只能线性膨胀。系统要么把所有历史硬塞给模型，要么粗暴截断早期信息；用户中途干预也只能变成一条普通消息，模型无法理解它是“立即转向”还是“之后再做”。</p>
+        </section>
+
+        <section id="startup">
+          <div class="section-heading"><span class="section-no">03</span><h2>启动：资源发现和信任边界</h2></div>
+          <p>启动阶段的产品目标是建立稳定基线：加载该加载的规范，拒绝不该信任的项目资源，并把全局与项目级设置合并成确定性的上下文输入。</p>
+          <h3>分层资源发现</h3>
+          <pre class="copyable"><code>全局资源 (agentDir)
+  ├── AGENTS.md / CLAUDE.md
+  ├── SKILL.md
+  ├── PROMPT.md
+  └── settings.json
+          ↓ 深度合并，项目覆盖全局
+项目资源 (cwd 向上搜索)
+  ├── AGENTS.md / CLAUDE.md
+  ├── .pi/SYSTEM.md / .pi/APPEND_SYSTEM.md
+  ├── .pi/SKILL.md
+  ├── .pi/PROMPT.md
+  └── .pi/settings.json</code></pre>
+          <p><strong>策略：</strong>从全局到项目、从根目录到当前目录逐级加载。离代码越近的资源优先级越高。</p>
+          <p><strong>解决的问题：</strong>同一个用户会在不同项目中工作。全局资源提供通用行为基线，项目资源提供团队约定、架构约束和局部技能。</p>
+          <p><strong>不这样做会怎样：</strong>所有项目共享同一套行为规范，模型无法适配不同 repo；或者项目设置和全局设置冲突时行为不确定。</p>
+          <h3>项目信任系统</h3>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>不受信任项目的加载边界</span><span>Trust</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  subgraph RISK["未设边界：污染路径"]
+    direction TB
+    UREPO["Untrusted Repo"] --> BADFILE["AGENTS.md<br/>恶意 prompt injection"]
+    BADFILE --> BADPROMPT["System Prompt Builder<br/>项目指令被自动拼入"]
+    BADPROMPT --> SHIFT["LLM Behavior Shift<br/>行为边界被改写"]
+  end
+  subgraph SAFE["Trusted Mode：加载边界"]
+    direction TB
+    OPEN["打开项目"] --> GATE{"Trust Gate"}
+    GATE -->|"未信任"| SKIP["跳过项目级资源<br/>只加载 global context"]
+    GATE -->|"用户确认信任"| LOAD["加载项目级资源<br/>settings · AGENTS · skills"]
+    SKIP --> CTX["进入上下文构建"]
+    LOAD --> CTX
+  end
+  class UREPO,BADFILE,BADPROMPT,SHIFT section-root
+  class OPEN,GATE,SKIP,LOAD section-1
+  class CTX section-2</pre></div>
+          </div>
+          <p><strong>策略：</strong>不受信任项目不自动加载项目级 <code>settings.json</code>、<code>AGENTS.md</code>、<code>SYSTEM.md</code> 和技能资源。信任决策可以询问用户、记录、撤销。</p>
+          <p><strong>解决的问题：</strong>防止恶意仓库通过项目说明文件植入 prompt injection，诱导 agent 忽略安全规则或泄漏信息。</p>
+          <p><strong>不这样做会怎样：</strong>用户 clone 一个陌生仓库并打开，仓库中的指令就可能直接改写 agent 行为。上下文工程从第一步就被污染。</p>
+        </section>
+
+        <section id="session-tree">
+          <div class="section-heading"><span class="section-no">04</span><h2>会话树：上下文不是线性聊天记录</h2></div>
+          <p>pi 把会话存为树，而不是扁平消息数组。每次 LLM 响应、工具执行、压缩、模型变更、思维级别变更都是树上的 Entry。</p>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>线性聊天 vs 会话树结构</span><span>Session</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  subgraph LINEAR["Linear Chat｜单一路径"]
+    direction LR
+    LA["A"] --> LB["B"] --> LC["C"] --> LD["D"]
+  end
+  LD --> LNOTE["只能继续或删除<br/>失败路径会污染后续上下文"]
+  subgraph TREE["Session Tree｜可恢复探索"]
+    direction TB
+    TA["A 根节点"] --> TMAIN["B 主线"]
+    TA --> TC["C 分支"]
+    TC --> TD["D 新路径"]
+    TMAIN --> TE["CompactionEntry<br/>主线摘要"]
+  end
+  TD --> TNOTE["可 fork / 可 compaction / 可回滚<br/>探索路径不污染主线"]
+  TE --> TNOTE
+  class LA,LB,LC,LD,LNOTE section-root
+  class TA,TMAIN,TC,TD,TE,TNOTE section-1</pre></div>
+          </div>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>从叶节点逆向重建上下文</span><span>Session Tree</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  LEAF["从叶节点出发"] --> WALK["沿 parentId 向上追溯"]
+  WALK --> CHECK{"当前节点类型？"}
+  CHECK -->|"CompactionEntry"| STOP["停止追溯消息<br/>用摘要替代更早历史"]
+  CHECK -->|"MessageEntry"| PUSH["加入 messages"]
+  CHECK -->|"ThinkingLevelChangeEntry"| THINK["恢复 thinkingLevel"]
+  CHECK -->|"ModelChangeEntry"| MODEL["恢复模型"]
+  CHECK -->|"ActiveToolsChangeEntry"| TOOLS["恢复 activeToolNames"]
+  PUSH --> WALK
+  THINK --> WALK
+  MODEL --> WALK
+  TOOLS --> WALK
+  STOP --> DONE["返回 AgentContext"]</pre></div>
+          </div>
+          <p><strong>策略：</strong><code>buildSessionContext()</code> 从当前叶节点向上回放状态。遇到 <code>CompactionEntry</code> 就停止追溯早期原始消息，改用摘要；遇到模型、思维级别、工具状态变更 Entry，则恢复对应横向状态。</p>
+          <p><strong>解决的问题：</strong>用户可以从历史任意节点 fork，压缩不会删除原始 Entry，会话恢复后也能保持上次选择的模型、工具和思维预算。</p>
+          <p><strong>不这样做会怎样：</strong>线性历史无法无损探索。压缩等于永久删除消息；用户切换到高思维级别或禁用某工具后，恢复会话时状态又回到默认值。</p>
+          <details>
+            <summary>深挖：会话树像产品里的“可回滚决策流”</summary>
+            <div class="details-body">
+              <p>对 AI 编码产品而言，用户经常需要尝试另一条路径：换一种重构方案、回退一个工具调用、从旧结论处重新提问。树形会话把这些探索变成低成本动作。被放弃的分支可以被摘要保存，主线不被污染，历史也不被丢弃。</p>
+            </div>
+          </details>
+        </section>
+
+        <section id="system-prompt">
+          <div class="section-heading"><span class="section-no">05</span><h2>系统提示词：最大的单次文本装配</h2></div>
+          <p><code>buildSystemPrompt()</code> 是上下文工程里最接近“拼接 prompt”的地方，但它不是简单拼接，而是按来源和语义组织成稳定结构。</p>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>系统提示词组装路径</span><span>Prompt</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  subgraph BASE["基础段"]
+    direction TB
+    B1["customPrompt<br/>或默认角色 / 工具 / 指南"]
+    B2["appendSystemPrompt<br/>追加开发者扩展"]
+    B1 --> B2
+  end
+  subgraph PROJECT["项目段"]
+    direction TB
+    P1["project_context XML<br/>只注入可信项目资源"]
+    P2["available_skills 索引<br/>名称 · 描述 · 位置"]
+    P1 --> P2
+  end
+  subgraph RUNTIME["运行时段"]
+    direction TB
+    R1["当前日期"]
+    R2["cwd"]
+    R3["最终 systemPrompt"]
+    R1 --> R2 --> R3
+  end
+  B2 --> P1
+  P2 --> R1
+  class B1,B2 section-root
+  class P1,P2 section-1
+  class R1,R2,R3 section-2</pre></div>
+          </div>
+          <p><strong>策略：</strong>项目上下文用 XML 标签包裹，技能只放索引，不内联完整 <code>SKILL.md</code>。模型需要时再通过读取工具打开完整技能。</p>
+          <p><strong>解决的问题：</strong>XML 标签帮助模型识别结构，也方便调试来源；技能按需加载避免系统提示词被数十个技能文件膨胀到不可控。</p>
+          <p><strong>不这样做会怎样：</strong>20 个技能全部内联会在对话开始前消耗大量上下文窗口。模型注意力被技能说明稀释，真正的用户任务反而排在后面。</p>
+          <pre class="copyable"><code>&lt;available_skills&gt;
+  &lt;skill&gt;
+    &lt;name&gt;pdf-generation&lt;/name&gt;
+    &lt;description&gt;Generates PDF reports from markdown.&lt;/description&gt;
+    &lt;location&gt;/path/to/skills/pdf-generation/SKILL.md&lt;/location&gt;
+  &lt;/skill&gt;
+&lt;/available_skills&gt;</code></pre>
+          <details>
+            <summary>深挖：为什么技能只放索引</summary>
+            <div class="details-body">
+              <p>技能是能力目录，不是每轮都要读完的手册。把完整技能文件全部塞进系统提示词，会让模型在任务开始前就背负大量无关说明；只放名称、描述和位置，则保留了可发现性，也把是否读取完整内容交给当前任务需要。</p>
+            </div>
+          </details>
+        </section>
+
+        <section id="loop">
+          <div class="section-heading"><span class="section-no">06</span><h2>Agent Loop：每轮调用前的最后装配线</h2></div>
+          <p>进入 agent loop 后，上下文变化最频繁。模型每次调用前，消息都会经过 <code>transformContext()</code> 和 <code>convertToLlm()</code> 两道门。</p>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>上下文装配线</span><span>Loop</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  RAW["AgentMessage[]<br/>保留 Agent 语义"]
+  TCTX["transformContext()<br/>剪枝 / 注入"]
+  CONV["convertToLlm()<br/>协议转换 / 过滤"]
+  CALL["LLM Context + hooks<br/>streamSimple()"]
+  RAW --> TCTX --> CONV --> CALL
+  class RAW section-root
+  class TCTX,CONV section-1
+  class CALL section-2</pre></div>
+          </div>
+          <h3><code>transformContext()</code>：剪枝发生在 AgentMessage 层</h3>
+          <p><strong>策略：</strong>在转换为模型协议前剪枝，因为 <code>AgentMessage</code> 比普通 role/message 携带更多类型信息，可以区分 bash 输出、自定义消息、压缩摘要、分支摘要。</p>
+          <p><strong>解决的问题：</strong>剪枝时不能只看 user/assistant/tool。工具输出可能是当前任务的关键证据，UI 通知则不应该进入模型上下文。</p>
+          <h3><code>convertToLlm()</code>：最后一道门</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>AgentMessage 类型</th><th>转换结果</th><th>原因</th></tr></thead>
+              <tbody>
+                <tr><td>User / Assistant / ToolResult</td><td>原样传递</td><td>LLM 原生支持。</td></tr>
+                <tr><td>BashExecutionMessage</td><td>转换为 UserMessage</td><td>模型不理解 bash 执行类型，需要翻译成可读上下文。</td></tr>
+                <tr><td>BranchSummaryEntry / CompactionEntry</td><td>转换为带 XML 的 UserMessage</td><td>摘要需要被后续模型感知。</td></tr>
+                <tr><td>内部 UI 或不可转换消息</td><td>过滤掉</td><td>只服务系统，不应消耗模型上下文。</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3><code>excludeFromContext</code>：用户静默执行</h3>
+          <p><strong>策略：</strong>用户用 <code>!!</code> 前缀执行 bash 时，输出保留在会话历史和 UI 中，但不进入 LLM 上下文。</p>
+          <p><strong>解决的问题：</strong>用户需要“看一眼”的诊断输出，可能包含敏感信息或大量噪音，不一定希望模型看到。</p>
+          <details>
+            <summary>深挖：两道门的产品分工</summary>
+            <div class="details-body">
+              <p><code>transformContext()</code> 更像编排层，决定哪些 AgentMessage 还能代表当前任务；<code>convertToLlm()</code> 更像协议层，决定这些消息如何被翻译成模型能理解的 role 和 content。两者分开，才能同时保留产品语义和模型协议的稳定性。</p>
+            </div>
+          </details>
+        </section>
+
+        <section id="compaction">
+          <div class="section-heading"><span class="section-no">07</span><h2>Compaction：用摘要替代膨胀历史</h2></div>
+          <p>上下文压缩不是“删掉旧消息”，而是把早期历史重写为结构化摘要。它在 agent 准备停止时触发，避免活跃工作中多插一次昂贵的 LLM 调用。</p>
+          <p><strong>策略：</strong>默认开启压缩，保留最近约 20K tokens 原始消息，为响应预留约 16K tokens。压缩摘要固定为 Goal、Constraints、Progress、Key Decisions、Next Steps、Critical Context 六个 section。</p>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>Compaction 前后对比</span><span>Memory</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  BEFORE["Before<br/>User → Assistant → Tool Call → Tool Output → Assistant → ..."]
+  AFTER["After：CompactionEntry<br/>Goal / Constraints / Progress<br/>Key Decisions / Next Steps / Critical Context"]
+  RESUME["后续模型从摘要恢复任务状态"]
+  BEFORE --> AFTER --> RESUME
+  class BEFORE section-root
+  class AFTER section-1
+  class RESUME section-2</pre></div>
+          </div>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>为什么不在 toolResult 处切分</span><span>Cut Point</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  subgraph BAD["错误切分：toolResult 被孤立"]
+    direction LR
+    A1["User<br/>重构 auth.ts"] --> A2["Assistant<br/>read auth.ts"] --> A3["ToolResult<br/>auth.ts 内容"] -.-> CUT1["压缩切分点"] --> A4["Assistant<br/>edit auth.ts"]
+  end
+  BAD_NOTE["问题：文件内容脱离触发它的工具调用，后续模型不知道这段内容从何而来"]
+  subgraph GOOD["正确切分：保留调用链结构"]
+    direction LR
+    B1["User<br/>重构 auth.ts"] -.-> CUT2["压缩切分点"] --> B2["Assistant<br/>read auth.ts"] --> B3["ToolResult<br/>auth.ts 内容"] --> B4["Assistant<br/>edit auth.ts"]
+  end
+  GOOD_NOTE["结果：user → assistant → toolResult 的上下文链条完整保留"]
+  BAD --> BAD_NOTE
+  BAD_NOTE --> GOOD
+  GOOD --> GOOD_NOTE</pre></div>
+          </div>
+          <p><strong>解决的问题：</strong>保持 user → assistant tool call → toolResult 的三连体完整性。模型看到文件内容时，也能知道这是哪个工具调用的返回。</p>
+          <p><strong>不这样做会怎样：</strong>工具结果脱离触发它的助手消息，后续模型只看到一段内容，却不知道它来自哪里、为什么出现、应该服务哪个任务。</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>摘要 section</th><th>防止丢失的信息</th></tr></thead>
+              <tbody>
+                <tr><td>Goal</td><td>用户最初要达成什么目标。</td></tr>
+                <tr><td>Constraints</td><td>项目限制、用户明确边界、不能做的事。</td></tr>
+                <tr><td>Progress</td><td>已完成和未完成的工作。</td></tr>
+                <tr><td>Key Decisions</td><td>重要取舍及原因。</td></tr>
+                <tr><td>Next Steps</td><td>会话恢复后从哪里继续。</td></tr>
+                <tr><td>Critical Context</td><td>容易被压缩遗漏但会影响后续判断的细节。</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <details>
+            <summary>深挖：好的压缩不是摘要文学</summary>
+            <div class="details-body">
+              <p>面向 Agent 的 compaction 不是把聊天记录写短，而是把可继续执行所需的状态重新编码。目标、限制、已改文件、失败尝试和下一步必须同时存在，否则恢复后的模型会把摘要当成普通背景材料，而不是接续工作的操作说明。</p>
+            </div>
+          </details>
+        </section>
+
+        <section id="constraints">
+          <div class="section-heading"><span class="section-no">08</span><h2>三维约束：防欠给、防错给、防过给</h2></div>
+          <p class="lead">pi 的关键产品价值不是“给模型更多上下文”，而是让上下文的数量、质量和时机都处在可控范围内。</p>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>上下文工程约束总览</span><span>Constraints</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  ROOT["上下文工程约束"]
+  subgraph U["防欠给：信息最低充分"]
+    direction TB
+    U1["系统提示词完整性"] --> U2["项目上下文自动注入"] --> U3["工具定义完整性"] --> U4["结构化压缩摘要"] --> U5["跨会话状态恢复"]
+  end
+  subgraph W["防错给：输入必须可信"]
+    direction TB
+    W1["activeToolNames"] --> W2["SourceInfo 来源追踪"] --> W3["确定性设置合并"] --> W4["压缩切分点策略"] --> W5["schema 参数验证"]
+  end
+  subgraph O["防过给：预算服务当前任务"]
+    direction TB
+    O1["技能按需加载"] --> O2["上下文压缩"] --> O3["transformContext 剪枝"] --> O4["convertToLlm 过滤"] --> O5["excludeFromContext"]
+  end
+  ROOT --> U
+  ROOT --> W
+  ROOT --> O</pre></div>
+          </div>
+          <div class="summary-index plain">
+            <div class="summary-item"><span class="summary-title">防欠给</span><span class="summary-desc">目标、约束、工具、路径和历史决策稳定出现。</span></div>
+            <div class="summary-item"><span class="summary-title">防错给</span><span class="summary-desc">信息与系统真实状态一致，避免错误前提。</span></div>
+            <div class="summary-item"><span class="summary-title">防过给</span><span class="summary-desc">减少无关信息，让预算服务当前任务。</span></div>
+          </div>
+        </section>
+
+        <section id="under">
+          <div class="section-heading"><span class="section-no">09</span><h2>防欠给：让模型不必脑补</h2></div>
+          <p><strong>策略：</strong>系统提示词注入当前日期、cwd、可用工具、项目上下文和技能索引；压缩摘要强制结构化；会话恢复时还原模型、思维级别和活跃工具。</p>
+          <p><strong>解决的问题：</strong>编码 agent 面对的是当前文件系统和当前项目约定，不是训练语料里的平均项目。缺少这些信息，模型只能猜。</p>
+          <p><strong>不这样做会怎样：</strong>模型不知道工作目录，会把文件写到错误位置；不知道项目规则，会引入不符合风格的实现；不知道早期决策，会重复讨论或做出矛盾选择。</p>
+          <div class="callout green"><p><strong>产品判断：</strong>防欠给不是把所有资料都塞进去，而是保证“当前决策所需的最低充分信息”稳定出现。</p></div>
+        </section>
+
+        <section id="wrong">
+          <div class="section-heading"><span class="section-no">10</span><h2>防错给：错误上下文比缺上下文更危险</h2></div>
+          <p><strong>策略：</strong>用 <code>activeToolNames</code> 控制工具暴露，用 SourceInfo 追踪 prompt 来源，用 TypeBox schema 验证工具参数，用确定性深度合并保证设置结果可复现。</p>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>activeToolNames 的上下文预算控制</span><span>Tools</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart LR
+  ALL["全部已注册工具<br/>可能 20+ 个"] --> FILTER["activeToolNames 过滤"]
+  FILTER --> CTX["实际发送给 LLM 的工具<br/>只保留当前阶段需要的 3-5 个"]
+  FILTER -.-> EVENT["ActiveToolsChangeEntry<br/>写入会话树"]</pre></div>
+          </div>
+          <p><strong>解决的问题：</strong>模型不应该在纯分析阶段看到写文件工具，也不应该在一个只需读文件的任务里被几十个无关工具诱导。</p>
+          <p><strong>不这样做会怎样：</strong>工具定义占用大量 token，模型选择困难，甚至在错误阶段调用有副作用的工具。错误工具结果进入上下文后，会继续污染后续推理。</p>
+        </section>
+
+        <section id="over">
+          <div class="section-heading"><span class="section-no">11</span><h2>防过给：上下文预算是产品资源</h2></div>
+          <p><strong>策略：</strong>技能只放索引，工具动态过滤，内部消息在 <code>convertToLlm()</code> 过滤，旧历史通过 compaction 替代，探索性 bash 输出可用 <code>excludeFromContext</code> 排除。</p>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>上下文预算分配器</span><span>Budget</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  WINDOW["Context Window<br/>每轮调用前重新分配"]
+  subgraph FIXED["固定和半固定预算"]
+    direction LR
+    SYS["System Prompt<br/>稳定但占位"]
+    PROJ["Project Context<br/>半固定"]
+  end
+  subgraph DYNAMIC["动态预算"]
+    direction LR
+    MSG["Recent Messages<br/>当前任务现场"]
+    TOOL["Tool Results<br/>高波动"]
+    MEM["Compaction Summary<br/>压缩记忆"]
+  end
+  WINDOW --> SYS
+  WINDOW --> PROJ
+  SYS --> MSG
+  PROJ --> MSG
+  MSG --> TOOL --> MEM
+  MEM --> DECIDE["产品判断<br/>让预算服务当前决策"]
+  class WINDOW,SYS,PROJ section-root
+  class MSG,TOOL,MEM section-1
+  class DECIDE section-2</pre></div>
+          </div>
+          <p><strong>解决的问题：</strong>上下文窗口再大也不是无限。每一段无关内容都在和用户指令、关键文件、工具结果抢注意力。</p>
+          <p><strong>不这样做会怎样：</strong>系统提示词占满窗口，工具输出淹没目标，压缩被提前触发，模型对后半段 prompt 的遵循度下降。</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>机制</th><th>正常工作时</th><th>缺失时</th></tr></thead>
+              <tbody>
+                <tr><td>技能按需加载</td><td>系统提示词精炼，技能按需读取。</td><td>几十个技能内联，占用大量窗口。</td></tr>
+                <tr><td>结构化压缩</td><td>历史被浓缩为高密度摘要。</td><td>旧消息被截断，关键决策丢失。</td></tr>
+                <tr><td>工具过滤</td><td>只暴露当前阶段需要的工具。</td><td>模型被无关工具诱导，工具定义膨胀。</td></tr>
+                <tr><td>内部消息过滤</td><td>UI 和系统状态不污染推理。</td><td>模型看到不该看的管理消息。</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="sources">
+          <div class="section-heading"><span class="section-no">12</span><h2>来源分类：谁提供上下文，谁控制风险</h2></div>
+          <p class="lead">上下文不只是“消息”。它来自开发者预设、用户提供和 LLM 自建三层，每层的稳定性、可控性和风险都不同。</p>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>三层上下文来源模型</span><span>Sources</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  subgraph L1["第一层：开发者预设｜稳定骨骼"]
+    direction LR
+    A["系统提示词模板"] --> B["AGENTS.md / CLAUDE.md"] --> C["SKILL.md 索引"] --> D["默认设置"]
+  end
+  subgraph L2["第二层：用户提供｜动态肌肉"]
+    direction LR
+    E["项目设置覆盖"] --> F["实时用户消息"] --> G["steering / follow-up"] --> H["工具副作用"]
+  end
+  subgraph L3["第三层：LLM 自建｜生长记忆"]
+    direction LR
+    I["助理响应"] --> J["压缩摘要"] --> K["分支摘要"]
+  end
+  L1 --> L2
+  L2 --> L3</pre></div>
+          </div>
+          <h3>第一层：开发者预设</h3>
+          <p><strong>策略：</strong>角色身份、能力边界、默认值和基础提示词保持稳定，通过 append prompt 和项目资源扩展。</p>
+          <p><strong>产品含义：</strong>这是用户对 agent 建立预期的基础。它不应该频繁漂移。</p>
+          <h3>第二层：用户提供</h3>
+          <p><strong>策略：</strong>项目设置、项目上下文、实时输入和工具结果分开管理。项目资源受信任边界保护；实时消息进入双队列；工具结果接受钩子和剪枝约束。</p>
+          <h3>第三层：LLM 自建</h3>
+          <p><strong>策略：</strong>助手响应直接成为历史；压缩摘要使用固定模板；分支摘要跨分支传递上下文。</p>
+          <p><strong>风险：</strong>LLM 的每一轮输出都会影响下一轮输入。如果早期偏差没有检查点，它会在上下文中自我强化。</p>
+          <details>
+            <summary>深挖：来源分层解决的是责任边界</summary>
+            <div class="details-body">
+              <p>开发者预设负责稳定产品承诺，用户提供负责表达当前目标，LLM 自建负责沉淀执行过程。三者混在一起时，错误很难追责：到底是默认规则错了、用户输入变了，还是模型自己把偏差写进了历史。</p>
+            </div>
+          </details>
+        </section>
+
+        <section id="stability">
+          <div class="section-heading"><span class="section-no">13</span><h2>稳定性：可变性和可控性的矩阵</h2></div>
+          <p>产品上真正难管的不是稳定内容，而是“高可变、低可控”的内容：工具输出、命令日志、LLM 自己生成的历史和摘要。</p>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>上下文来源稳定性分布</span><span>Matrix</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">quadrantChart
+  title 上下文来源的稳定性分布
+  x-axis "低可控性" --> "高可控性"
+  y-axis "低可变性" --> "高可变性"
+  quadrant-1 "用户配置"
+  quadrant-2 "开发者预设"
+  quadrant-3 "工具副作用"
+  quadrant-4 "LLM 自建"
+  "系统提示词模板": [0.82, 0.12]
+  "默认设置": [0.86, 0.08]
+  "AGENTS.md": [0.72, 0.18]
+  "项目设置覆盖": [0.62, 0.34]
+  "用户 prompt": [0.46, 0.62]
+  "steering 消息": [0.36, 0.82]
+  "文件读取结果": [0.16, 0.72]
+  "命令执行输出": [0.08, 0.88]
+  "助理响应": [0.18, 0.86]
+  "压缩摘要": [0.22, 0.76]</pre></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>原则</th><th>产品解释</th></tr></thead>
+              <tbody>
+                <tr><td>不可变基础，可变扩展</td><td>核心系统提示词稳定，项目资源和 append prompt 做扩展。</td></tr>
+                <tr><td>默认即安全</td><td>大多数用户不会调参，所以默认值要偏向不出问题。</td></tr>
+                <tr><td>状态显式化</td><td>模型、思维级别、活跃工具都写成 Entry，而不是藏在消息里。</td></tr>
+                <tr><td>来源可追溯</td><td>上下文异常时，能定位到具体文件和来源。</td></tr>
+                <tr><td>信任边界明确</td><td>不受信任项目不自动注入项目级指令。</td></tr>
+                <tr><td>钩子优于硬编码策略</td><td>不同应用的剪枝、阻断和转换策略不同，核心只暴露边界。</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="insights">
+          <div class="section-heading"><span class="section-no">14</span><h2>深度洞察：上下文工程背后的产品架构</h2></div>
+          <p class="lead">从 Pi 源码看，最有价值的部分，是那些看起来不是“上下文功能”，但实际上决定上下文是否可长期运行的架构机制。</p>
+          <div class="summary-index">
+            <div class="summary-item"><span class="summary-key">Type</span><div class="summary-copy"><strong>声明合并</strong>消息类型可扩展，核心包不变成中央注册表。</div></div>
+            <div class="summary-item"><span class="summary-key">Event</span><div class="summary-copy"><strong>事件系统</strong>上下文变化有审计轨迹，不靠猜。</div></div>
+            <div class="summary-item"><span class="summary-key">Queue</span><div class="summary-copy"><strong>双队列</strong>区分“立即转向”和“做完再处理”。</div></div>
+          </div>
+        </section>
+
+        <section id="events">
+          <div class="section-heading"><span class="section-no">15</span><h2>事件和钩子：可观测性不是事后补丁</h2></div>
+          <p><strong>策略：</strong>agent loop 和 harness 在关键节点发射结构化事件：请求前、payload 前、响应后、工具执行前后、session compact 前后、模型更新、工具更新等。</p>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>事件系统如何包住上下文变化</span><span>Events</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  subgraph STREAM["模型响应事件"]
+    direction TB
+    LLM["LLM 响应流"] --> ME["message_start<br/>message_update<br/>message_end"]
+  end
+  subgraph TOOL["工具执行事件"]
+    direction TB
+    T1["tool_execution_start"] --> T2["beforeToolCall 钩子"]
+    T2 --> T3["execute 工具"]
+    T3 --> T4["tool_execution_end"]
+    T4 --> T5["afterToolCall 钩子"]
+  end
+  ME --> AUDIT["事件监听器<br/>统一观察上下文变化"]
+  T5 --> AUDIT
+  AUDIT --> CTX["上下文 / 状态更新"]
+  AUDIT --> ERR["错误标准化<br/>降级为可见结果"]
+  class LLM,ME section-root
+  class T1,T2,T3,T4,T5 section-1
+  class AUDIT section-2
+  class CTX,ERR section-3</pre></div>
+          </div>
+          <p><strong>解决的问题：</strong>模型表现异常时，开发者需要知道“那一刻到底发给模型什么”。事件系统让上下文构建过程可回放、可检查、可拦截。</p>
+          <p><strong>不这样做会怎样：</strong>只能看最终输出，无法判断是系统 prompt 漏了、工具列表错了、消息顺序乱了，还是插件改坏了 payload。</p>
+          <h3>永不抛出的钩子合约</h3>
+          <p><strong>策略：</strong>钩子和工具异常不能摧毁代理循环，而是被转成错误工具结果或标准化事件错误，让模型和上层系统继续处理。</p>
+          <p><strong>产品判断：</strong>在 AI Agent 中，上下文就是状态本身。崩溃不是简单重启进程，而是丢失推理链和用户信任。</p>
+          <details>
+            <summary>深挖：事件系统为什么属于上下文工程</summary>
+            <div class="details-body">
+              <p>事件不只是日志。它记录的是上下文何时被装配、修改、拦截和失败。没有事件，产品只能解释最终回答；有了事件，才能定位是哪一层上下文让模型走向了错误路径。</p>
+            </div>
+          </details>
+        </section>
+
+        <section id="queues">
+          <div class="section-heading"><span class="section-no">16</span><h2>双队列：用户插话的产品语义</h2></div>
+          <p>用户在 agent 工作中输入新内容，可能有两种完全不同的意图：马上纠偏，或者当前任务结束后追加一个新任务。pi 用 steering 和 follow-up 两条队列表达这个差异。</p>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>Steering 与 Follow-up 注入时机</span><span>Queues</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">sequenceDiagram
+  participant U as User
+  participant Q as Input Queues
+  participant L as Agent Loop
+  participant M as LLM
+  participant T as Tools
+  U->>Q: 工作中输入新指令
+  alt Steering｜立即纠偏
+    Q-->>L: 放入 steering queue
+    L->>T: 等当前工具边界完成
+    T-->>L: toolResult 返回
+    L->>M: 下一轮 LLM 前注入
+  else Follow-up｜做完再处理
+    Q-->>L: 放入 follow-up queue
+    L->>M: 先完成当前任务
+    M-->>L: 任务自然收束
+    L->>Q: 停止前检查 follow-up
+    Q-->>L: 转成下一轮用户目标
+  end</pre></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>维度</th><th>Steering</th><th>Follow-up</th></tr></thead>
+              <tbody>
+                <tr><td>语义</td><td>处理中途插话，需要尽快响应。</td><td>忙完手头工作后再处理。</td></tr>
+                <tr><td>注入时机</td><td>工具执行完成后、下一轮 LLM 前。</td><td>agent 准备自然停止时。</td></tr>
+                <tr><td>默认模式</td><td>one-at-a-time，逐条注入。</td><td>one-at-a-time，逐条注入。</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="branching">
+          <div class="section-heading"><span class="section-no">17</span><h2>分支和热替换：让上下文支持探索</h2></div>
+          <p><strong>策略：</strong>会话树支持从任意历史点分叉；<code>prepareNextTurn</code> 允许在 turn 边界替换上下文、模型和思维级别。</p>
+          <div class="diagram-card">
+            <div class="diagram-title"><span>分支会话保留探索路径</span><span>Branch</span></div>
+            <div class="diagram-scroll"><pre class="mermaid">flowchart TB
+  MAIN["主线历史<br/>根节点 → 消息 → CompactionEntry"]
+  FORK["分叉点<br/>保留当前上下文"]
+  A["探索 A<br/>工具调用 → 结果 → BranchSummaryEntry"]
+  B["探索 B<br/>工具调用 → 结果"]
+  NEXT["继续主线<br/>或再次 fork"]
+  MAIN --> FORK
+  FORK --> A
+  FORK --> B
+  A --> NEXT
+  B --> NEXT
+  class MAIN,FORK section-root
+  class A section-1
+  class B section-2
+  class NEXT section-3</pre></div>
+          </div>
+          <p><strong>解决的问题：</strong>复杂编码任务天然需要 what-if 探索。用户不应因为尝试一条路径就污染主线，也不应因为回退而永久丢失后续历史。</p>
+          <p><strong>不这样做会怎样：</strong>线性会话只能继续或删除。实验性工具调用一旦失败，就留在上下文里持续干扰后续模型。</p>
+        </section>
+
+        <section id="resilience">
+          <div class="section-heading"><span class="section-no">18</span><h2>韧性：失败也要进入上下文协议</h2></div>
+          <p>生产级 agent 不可能假设 API、网络、工具、插件永远成功。pi 的选择是把失败纳入上下文协议，而不是让失败撕裂上下文。</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>机制</th><th>策略</th><th>产品价值</th></tr></thead>
+              <tbody>
+                <tr><td>工具执行异常</td><td>转换为 <code>isError: true</code> 的工具结果。</td><td>模型知道工具失败，可以重试或换方案。</td></tr>
+                <tr><td>重试机制</td><td>应用层分类错误，指数退避，成功后清零。</td><td>临时网络错误不终止任务，上下文溢出不盲目重试。</td></tr>
+                <tr><td>StreamFn 合约</td><td>传输失败序列化到流数据，而不是抛出。</td><td>避免流式消息半截中断后留下不可解释状态。</td></tr>
+                <tr><td>设置迁移</td><td>启动时幂等迁移旧设置和会话文件。</td><td>升级后历史上下文和用户配置不丢失。</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p><strong>关键洞察：</strong>AI Agent 的状态不在某个数据库字段里，而在上下文、事件、工具结果和会话树的组合里。韧性设计本质上是在保护这组状态的连续性。</p>
+        </section>
+
+        <section id="defaults">
+          <div class="section-heading"><span class="section-no">19</span><h2>默认值：产品选择藏在配置里</h2></div>
+          <p>pi 的默认值体现了一个明确倾向：对新用户来说，默认应该是不容易出问题，而不是理论上性能最优。</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>配置项</th><th>默认值</th><th>设计考量</th></tr></thead>
+              <tbody>
+                <tr><td><code>toolExecution</code></td><td>parallel</td><td>大多数读文件、搜索、列目录可并行，减少等待。</td></tr>
+                <tr><td><code>thinkingLevel</code></td><td>medium</td><td>平衡推理质量与 token 消耗。</td></tr>
+                <tr><td><code>steeringMode</code></td><td>one-at-a-time</td><td>逐条注入，防止多条插话同时涌入。</td></tr>
+                <tr><td><code>followUpMode</code></td><td>one-at-a-time</td><td>让模型每处理一条后再看下一条。</td></tr>
+                <tr><td><code>compaction.enabled</code></td><td>true</td><td>默认防止长会话溢出。</td></tr>
+                <tr><td><code>compaction.reserveTokens</code></td><td>16384</td><td>为模型响应预留空间。</td></tr>
+                <tr><td><code>compaction.keepRecentTokens</code></td><td>20000</td><td>保留最近工作区的原始上下文。</td></tr>
+                <tr><td><code>retry.maxRetries</code></td><td>3</td><td>覆盖多数 API 波动，避免无限重试。</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="principles">
+          <div class="section-heading"><span class="section-no">20</span><h2>总结：面向生产级 AI Agent 的设计原则</h2></div>
+          <p class="lead">pi 的上下文工程不是单点优化，而是一套产品系统：资源发现、信任边界、会话树、压缩、防错、事件、队列和韧性机制共同工作。</p>
+          <ol class="step-list">
+            <li><strong>上下文即状态。</strong>对 AI Agent 来说，历史、工具结果、摘要和配置状态共同定义当前世界。保护上下文，就是保护产品连续性。</li>
+            <li><strong>上下文预算要主动管理。</strong>不要把选择权完全交给模型。哪些工具可见、哪些技能可读、哪些消息进入上下文，都应由编排层管理。</li>
+            <li><strong>错误信息要显式进入协议。</strong>工具失败、钩子异常、流式中断都要被结构化表达，而不是让循环崩溃。</li>
+            <li><strong>用户意图需要时机语义。</strong>同一句用户输入，在工作中途和工作结束后含义不同。steering 和 follow-up 的差异是产品语义，不只是队列实现。</li>
+            <li><strong>默认值是一种产品承诺。</strong>新用户不调参也应该得到稳定行为，高级用户再通过钩子和配置覆盖。</li>
+          </ol>
+          <div class="callout violet"><p><strong>最终判断：</strong>pi 把 AI Agent 当成一个需要长期运行、可观察、可恢复、可扩展的产品系统，而不是一个简单的模型调用脚本。这正是上下文工程从 prompt 技巧升级为产品架构的分界线。</p></div>
+        </section>
+
+        <footer class="page-footer" aria-label="作品集信息">
+          <div><strong>Pi-Agent 上下文工程源码拆解</strong></div>
+          <div class="page-footer-meta"><span>Yahang XU</span><span>2026-06-05</span></div>
+        </footer>
+      </article>
+    </main>
+  </div>
+  <button class="back-to-top" type="button" data-back-top aria-label="返回顶部" aria-hidden="true">↑</button>
+  <script src="./mermaid.min.js"></script>
+  <script>
+  
+(() => {
+  const root = document.documentElement;
+  const body = document.body;
+  const menuButton = document.querySelector('[data-menu-button]');
+  const closeButton = document.querySelector('[data-close-menu]');
+  const mobilePanel = document.querySelector('[data-mobile-panel]');
+  const backdrop = document.querySelector('[data-backdrop]');
+  const backTopButton = document.querySelector('[data-back-top]');
+  const themeButtons = document.querySelectorAll('[data-theme-toggle]');
+  const sections = Array.from(document.querySelectorAll('main section[id]'));
+  const navLinks = Array.from(document.querySelectorAll('a[data-section-link]'));
+  const mermaidBlocks = Array.from(document.querySelectorAll('.mermaid'));
+  mermaidBlocks.forEach((node) => {
+    node.dataset.source = node.textContent;
+  });
+
+  const storedTheme = localStorage.getItem('pi-context-theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (storedTheme === 'dark' || (!storedTheme && prefersDark)) {
+    root.classList.add('dark');
+  }
+
+  const updateThemeLabels = () => {
+    const isDark = root.classList.contains('dark');
+    themeButtons.forEach((button) => {
+      button.setAttribute('aria-label', isDark ? '切换到浅色模式' : '切换到深色模式');
+      button.setAttribute('aria-pressed', String(isDark));
+    });
+  };
+  updateThemeLabels();
+
+  const cssValue = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+  const mermaidConfig = () => {
+    const isDark = root.classList.contains('dark');
+    const bg = cssValue('--diagram-bg');
+    const panel = cssValue('--diagram-panel');
+    const node = cssValue('--diagram-node');
+    const stroke = cssValue('--diagram-stroke');
+    const edge = cssValue('--diagram-edge');
+    const text = cssValue('--diagram-text');
+    const muted = cssValue('--diagram-text-muted');
+    const red = cssValue('--red');
+    const blueSoft = cssValue('--blue-soft');
+    const greenSoft = cssValue('--green-soft');
+    const amberSoft = cssValue('--amber-soft');
+    const redSoft = cssValue('--red-soft');
+    const neutralFill = isDark ? '#171d2a' : '#ffffff';
+    const neutralPanel = isDark ? '#151923' : '#f8fafc';
+    const neutralSoft = isDark ? '#111827' : '#f1f5f9';
+    return {
+      startOnLoad: false,
+      theme: 'base',
+      securityLevel: 'loose',
+      fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+      themeVariables: {
+        background: bg,
+        mainBkg: node,
+        primaryColor: neutralFill,
+        primaryBorderColor: stroke,
+        primaryTextColor: text,
+        secondaryColor: neutralFill,
+        secondaryBorderColor: stroke,
+        secondaryTextColor: text,
+        tertiaryColor: neutralFill,
+        tertiaryBorderColor: stroke,
+        tertiaryTextColor: text,
+        lineColor: edge,
+        textColor: text,
+        nodeBorder: stroke,
+        clusterBkg: panel,
+        clusterBorder: stroke,
+        defaultLinkColor: edge,
+        edgeLabelBackground: panel,
+        titleColor: text,
+        fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+        fontSize: '14px',
+        actorBkg: neutralFill,
+        actorBorder: stroke,
+        actorTextColor: text,
+        actorLineColor: stroke,
+        signalColor: edge,
+        signalTextColor: muted,
+        labelBoxBkgColor: panel,
+        labelBoxBorderColor: stroke,
+        noteBkgColor: neutralPanel,
+        noteBorderColor: stroke,
+        noteTextColor: text,
+        activationBkgColor: neutralSoft,
+        activationBorderColor: edge,
+        sequenceNumberColor: isDark ? '#09090b' : '#ffffff',
+        quadrant1Fill: blueSoft,
+        quadrant2Fill: greenSoft,
+        quadrant3Fill: amberSoft,
+        quadrant4Fill: redSoft,
+        quadrantPointFill: edge,
+        quadrantPointTextFill: text,
+        quadrantXAxisTextFill: muted,
+        quadrantYAxisTextFill: muted,
+        quadrantInternalBorderStrokeFill: stroke,
+        quadrantExternalBorderStrokeFill: stroke,
+        quadrantTitleFill: text,
+      },
+      themeCSS: `
+        .node rect, .node circle, .node ellipse, .node polygon, .node path { fill: ${neutralFill}; stroke: ${stroke}; stroke-width: 1.5px; filter: none; }
+        .node .label, .nodeLabel, .cluster-label, .edgeLabel, .label, text { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+        .edgePath path, .flowchart-link, .messageLine0, .messageLine1 { stroke: ${edge}; stroke-width: 1.5px; }
+        .cluster rect { fill: ${neutralPanel}; stroke: ${stroke}; rx: 5px; stroke-dasharray: 4 3; }
+        .edgeLabel { color: ${muted}; background-color: ${panel}; }
+        .marker, marker path { fill: ${edge}; stroke: ${edge}; }
+        .error-icon { fill: ${red}; }
+        .mindmap-node circle, .mindmap-node rect, .mindmap-node polygon { stroke-width: 1.5px; }
+        .actor, .actor > rect { fill: ${neutralFill}; stroke: ${stroke}; }
+        .activation0, .activation1, .activation2 { fill: ${neutralSoft}; stroke: ${edge}; }
+        .note { fill: ${neutralPanel}; stroke: ${stroke}; }
+        .section-root path, .section-root rect { fill: ${neutralFill}; stroke: ${stroke}; }
+        .section-root text { fill: ${text}; }
+        .section-1 path, .section-1 rect { fill: ${neutralFill}; stroke: ${stroke}; }
+        .section-2 path, .section-2 rect { fill: ${neutralFill}; stroke: ${stroke}; }
+        .section-3 path, .section-3 rect { fill: ${neutralFill}; stroke: ${stroke}; }
+      `,
+      flowchart: { htmlLabels: true, curve: 'basis', padding: 18, nodeSpacing: 42, rankSpacing: 46 },
+      sequence: { mirrorActors: false, diagramMarginX: 20, diagramMarginY: 18, boxMargin: 8, messageMargin: 34 },
+      mindmap: { padding: 20 },
+    };
+  };
+
+  themeButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      root.classList.toggle('dark');
+      localStorage.setItem('pi-context-theme', root.classList.contains('dark') ? 'dark' : 'light');
+      updateThemeLabels();
+      renderMermaid(true);
+    });
+  });
+
+  const openMenu = () => {
+    body.classList.add('menu-open');
+    mobilePanel?.removeAttribute('hidden');
+    backdrop?.removeAttribute('hidden');
+  };
+  const closeMenu = () => {
+    body.classList.remove('menu-open');
+    mobilePanel?.setAttribute('hidden', '');
+    backdrop?.setAttribute('hidden', '');
+  };
+  menuButton?.addEventListener('click', openMenu);
+  closeButton?.addEventListener('click', closeMenu);
+  backdrop?.addEventListener('click', closeMenu);
+
+  document.querySelectorAll('a[href^="#"]').forEach((link) => {
+    link.addEventListener('click', (event) => {
+      const targetId = link.getAttribute('href');
+      const target = targetId ? document.querySelector(targetId) : null;
+      if (!target) return;
+      event.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      history.replaceState(null, '', targetId);
+      closeMenu();
+    });
+  });
+
+  let activeSectionId = '';
+  const activateSection = (id) => {
+    if (!id || activeSectionId === id) return;
+    activeSectionId = id;
+    navLinks.forEach((link) => {
+      const isActive = link.getAttribute('href') === '#' + id;
+      link.classList.toggle('is-active', isActive);
+      if (isActive) link.setAttribute('aria-current', 'true');
+      else link.removeAttribute('aria-current');
+    });
+  };
+
+  const setActiveByScroll = () => {
+    if (!sections.length) return;
+    const activationLine = window.innerHeight * 0.36;
+    let current = sections[0].id;
+    sections.forEach((section) => {
+      if (section.getBoundingClientRect().top <= activationLine) current = section.id;
+    });
+    activateSection(current);
+  };
+
+  const observer = new IntersectionObserver((entries) => {
+    const visible = entries
+      .filter((entry) => entry.isIntersecting)
+      .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+    if (visible?.target?.id) activateSection(visible.target.id);
+    else setActiveByScroll();
+  }, { rootMargin: '-12% 0px -58% 0px', threshold: [0.01, 0.18, 0.42] });
+  sections.forEach((section) => observer.observe(section));
+
+  const updateBackTop = () => {
+    if (!backTopButton) return;
+    const visible = window.scrollY > 640;
+    backTopButton.classList.toggle('is-visible', visible);
+    backTopButton.setAttribute('aria-hidden', String(!visible));
+  };
+
+  let scrollTicking = false;
+  const handleViewportChange = () => {
+    if (scrollTicking) return;
+    scrollTicking = true;
+    window.requestAnimationFrame(() => {
+      scrollTicking = false;
+      updateBackTop();
+      setActiveByScroll();
+      fitMermaidDiagrams();
+    });
+  };
+  window.addEventListener('scroll', handleViewportChange, { passive: true });
+  window.addEventListener('resize', handleViewportChange);
+  backTopButton?.addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+  updateBackTop();
+  setActiveByScroll();
+
+  const selectCode = (pre) => {
+    const codeNode = pre.querySelector('code') || pre;
+    const range = document.createRange();
+    range.selectNodeContents(codeNode);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+
+  const copyText = async (text, pre) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return 'copied';
+    }
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand('copy');
+    textarea.remove();
+    if (copied) return 'copied';
+    selectCode(pre);
+    return 'selected';
+  };
+
+  document.querySelectorAll('pre.copyable').forEach((pre) => {
+    const button = document.createElement('button');
+    button.className = 'copy-button';
+    button.type = 'button';
+    button.textContent = '复制';
+    button.addEventListener('click', async () => {
+      const code = pre.querySelector('code')?.innerText || pre.innerText;
+      try {
+        const result = await copyText(code, pre);
+        button.textContent = result === 'copied' ? '已复制' : '已选中';
+        setTimeout(() => { button.textContent = '复制'; }, 1600);
+      } catch {
+        selectCode(pre);
+        button.textContent = '已选中';
+        setTimeout(() => { button.textContent = '复制'; }, 1600);
+      }
+    });
+    pre.appendChild(button);
+  });
+
+  document.querySelectorAll('details').forEach((details) => {
+    details.addEventListener('toggle', () => {
+      details.classList.toggle('is-open', details.open);
+    });
+  });
+
+  const fitMermaidDiagrams = () => {
+    document.querySelectorAll('.diagram-scroll').forEach((scroll) => {
+      const svg = scroll.querySelector('.mermaid svg');
+      const box = svg?.viewBox?.baseVal;
+      if (svg && box?.width) {
+        const availableWidth = Math.max(260, scroll.clientWidth - 44);
+        const targetWidth = Math.min(Math.ceil(box.width), availableWidth);
+        svg.style.width = targetWidth + 'px';
+        svg.style.maxWidth = '100%';
+        svg.style.height = 'auto';
+      }
+      scroll.classList.toggle('has-overflow', scroll.scrollWidth > scroll.clientWidth + 6);
+    });
+  };
+
+  const renderMermaid = (reset = false) => {
+    if (!window.mermaid) return;
+    if (reset) {
+      mermaidBlocks.forEach((node) => {
+        node.innerHTML = node.dataset.source || '';
+        node.removeAttribute('data-processed');
+        node.classList.remove('mermaid-fallback');
+      });
+    }
+    window.mermaid.initialize(mermaidConfig());
+    window.mermaid.run({ querySelector: '.mermaid' })
+      .then(fitMermaidDiagrams)
+      .catch((error) => {
+        document.querySelectorAll('.mermaid').forEach((node) => {
+          node.classList.add('mermaid-fallback');
+        });
+        console.warn('Mermaid render failed', error);
+      });
+  };
+  renderMermaid();
+})();
+
+  </script>
+</body>
+</html>
