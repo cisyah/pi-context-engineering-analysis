@@ -40,4 +40,6 @@ An interactive analysis that treats Pi-Agent as a production AI product and answ
 
 ![Overview](screenshot-overview.jpg)
 
+![Design Principles](screenshot-insights.jpg)
+
 ---
