@@ -1,67 +1,16 @@
-# Pi-Agent 上下文工程策略分析 / Context Engineering Analysis
+# Context Engineering Analysis: How Pi-Agent Builds Production-Grade Agent Context
 
-[English](#english) | [中文](#中文)
+> A systematic teardown of [Pi-Agent](https://github.com/earendil-works/pi-mono)'s context engineering — analyzed from an AI Product Manager's perspective, focusing on how context is built, constrained, and stabilized throughout an agent's lifecycle.
 
----
+## 🎯 What Is This
 
-<a id="中文"></a>
+An interactive analysis that treats Pi-Agent as a production AI product and answers:
 
-## 🔗 [在线查看分析页面](https://pi-context-engineering-analys1s.vercel.app)
+- How does context flow through a single task, from startup to completion?
+- What are the three fundamental tensions in context engineering (under-supply, wrong-supply, over-supply)?
+- How does a production Agent decide what the model should see at each turn?
 
-从 AI 产品经理视角，交互式拆解 [Pi-Agent](https://github.com/earendil-works/pi-mono) 的上下文工程策略——上下文如何构建、约束与稳定化。
-
-### 分析维度
-
-| # | 模块 | 核心问题 |
-|---|------|----------|
-| 01 | 总览 | 上下文工程不是 prompt 拼接，三个基础矛盾是什么？ |
-| 02 | 生命周期 | 一次任务中上下文如何流动？ |
-| 03 | 启动 | 资源如何分层发现？信任边界在哪？ |
-| 04 | 会话树 | 为什么上下文不是线性聊天记录？ |
-| 05 | 系统提示词 | 最大的单次文本装配做了什么？ |
-| 06 | Agent Loop | 每轮调用前的装配线如何工作？ |
-| 07 | Compaction | 历史如何被压缩而不丢失可恢复性？ |
-| 08 | 三维约束 | 防欠给、防错给、防过给如何同时成立？ |
-| 09 | 来源稳定性 | 三层来源模型和稳定性矩阵是什么？ |
-| 10 | 深度洞察 | 架构设计、韧性机制与默认值策略 |
-
-### 项目结构
-
-```
-├── index.html              # 交互式分析页面
-├── docs/                   # 原始分析文档
-│   ├── 01-概述与架构总览.md
-│   ├── 02-完整生命周期中的上下文构建.md
-│   ├── 03-上下文工程约束机制.md
-│   ├── 04-上下文来源分类与稳定性约束.md
-│   └── 05-额外发现与深度洞察.md
-├── LICENSE
-└── README.md
-```
-
-### 技术栈
-
-- 纯 HTML / CSS / JavaScript，零构建步骤
-- [Mermaid.js](https://mermaid.js.org/) 渲染架构图
-- CDN 加载，单文件部署
-
-### 部署
-
-托管于 [Vercel](https://vercel.com)，推送到 `main` 分支即自动部署。
-
-### 许可证
-
-分析内容 © Cissie (Xu Yahang)。Pi-Agent 源代码归属其原作者。
-
----
-
-<a id="english"></a>
-
-## 🔗 [View Live Analysis](https://pi-context-engineering-analys1s.vercel.app)
-
-An interactive teardown of [Pi-Agent](https://github.com/earendil-works/pi-mono)'s context engineering — how context is built, constrained, and stabilized throughout an agent's lifecycle. Analyzed from an AI Product Manager's perspective.
-
-### Analysis Dimensions
+## 📐 Analysis Dimensions
 
 | # | Module | Core Question |
 |---|--------|---------------|
@@ -76,30 +25,19 @@ An interactive teardown of [Pi-Agent](https://github.com/earendil-works/pi-mono)
 | 09 | Source Stability | What are the three-layer source model and stability matrix? |
 | 10 | Deep Insights | Architecture, resilience mechanisms, and default value strategies |
 
-### Project Structure
+## 🛠 Tech Stack
 
-```
-├── index.html              # Interactive analysis page
-├── docs/                   # Source analysis documents (Chinese)
-│   ├── 01-概述与架构总览.md
-│   ├── 02-完整生命周期中的上下文构建.md
-│   ├── 03-上下文工程约束机制.md
-│   ├── 04-上下文来源分类与稳定性约束.md
-│   └── 05-额外发现与深度洞察.md
-├── LICENSE
-└── README.md
-```
-
-### Tech Stack
-
-- Pure HTML / CSS / JavaScript — zero build step
-- [Mermaid.js](https://mermaid.js.org/) for architecture diagrams
+- Pure HTML / CSS / JavaScript, zero build dependencies
+- [Mermaid.js](https://mermaid.js.org/) — Architecture diagrams
 - CDN-loaded, single-file deployment
+- Responsive layout with dark mode support
 
-### Deploy
+## 🔗 Live Demo
 
-Hosted on [Vercel](https://vercel.com). Push to `main` to deploy automatically.
+[View Online →](https://pi-context-engineering-analys1s.vercel.app)
 
-### License
+## 📸 Screenshots
 
-Analysis content © Cissie (Xu Yahang). Pi-Agent source code belongs to its respective owners.
+![Overview](screenshot-overview.png)
+
+---
