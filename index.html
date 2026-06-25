@@ -251,6 +251,11 @@
       max-height: calc(100vh - var(--header) - 40px);
       overflow: auto;
       padding-right: 8px;
+      scrollbar-width: none;           /* Firefox */
+      -ms-overflow-style: none;        /* IE/Edge */
+    }
+    .sidebar::-webkit-scrollbar {      /* Chrome/Safari */
+      display: none;
     }
     .sidebar-group { margin-bottom: 24px; }
     .sidebar-title {
